@@ -1,0 +1,78 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs-hsvc 
+  namespace: workshop04
+spec:
+  clusterIP: None
+  selector:
+    app: rustfs
+  ports:
+  - name: s3
+    port: 9000
+    targetPort: s3
+  - name: console
+    port: 9001
+    targetPort: console
+  publishNotReadyAddresses: true
+
+---
+apiVersion: apps/v1 
+kind: StatefulSet
+metadata: 
+  name: rustfs-sts 
+  namespace: workshop04 
+spec:
+  serviceName: rustfs-hsvc
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      &pod-labels
+      app: rustfs
+  volumeClaimTemplates:
+  - metadata: 
+      name: data-vol
+    spec:
+      storageClassName: standard 
+      accessModes: [ ReadWriteOncePod ]
+      resources:
+        requests:
+          storage: 1Gi
+  template:
+    metadata:
+      labels:
+        <<: *pod-labels
+    spec:
+      securityContext:
+        fsGroup: 10001
+      containers:
+      - name: rustfs-container
+        image: rustfs/rustfs
+        imagePullPolicy: IfNotPresent
+        envFrom:
+          - configMapRef: 
+              name: rustfs-cm
+          - secretRef: 
+              name: rustfs-secret
+        ports:
+        - name: s3 
+          containerPort: 9000
+        - name: console
+          containerPort: 9001
+        resources:
+          requests:
+            memory: 250Mi
+            cpu: 200m
+          limits:
+            memory: 250Mi
+            cpu: 200m
+        volumeMounts:
+        - name: data-vol 
+          mountPath: /data
+        readinessProbe:
+          tcpSocket:
+            port: s3
+          initialDelaySeconds: 10
+          periodSeconds: 10

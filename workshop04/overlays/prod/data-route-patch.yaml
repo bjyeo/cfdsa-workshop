@@ -1,0 +1,3 @@
+- op: replace
+  path: /spec/hostnames/0
+  value: data.prod.172.25.0.5.nip.io
