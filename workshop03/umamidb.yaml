@@ -1,0 +1,76 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: umamidb-pvc
+  namespace: workshop03
+spec:
+  storageClassName: standard
+  accessModes: [ ReadWriteOncePod ]
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: umamidb-deploy
+  namespace: workshop03
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: umamidb
+      env: data
+      version: workshop
+  template:
+    metadata:
+      labels:
+        app: umamidb
+        env: data
+        version: workshop
+    spec:
+      volumes: 
+      - name: data-vol 
+        persistentVolumeClaim:
+          claimName: umamidb-pvc
+      containers:
+      - name: umamidb-container
+        image: postgres:16-alpine
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef: 
+            name: umami-cm
+        - secretRef: 
+            name: umamidb-secret
+        ports:
+        - name: pg-port 
+          containerPort: 5432
+        readinessProbe:
+          exec:
+            command: [ "sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB" ]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data-vol 
+          mountPath: /var/lib/postgresql/data
+        resources: {}
+
+---
+apiVersion: v1 
+kind: Service
+metadata:
+  name: umamidb-svc
+  namespace: workshop03
+spec:
+  type: ClusterIP
+  selector:
+    app: umamidb
+    env: data
+    version: workshop
+  ports:
+  - port: 5432
+    targetPort: pg-port
